@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.prefs;
+package com.afollestad.materialdialogs.common.prefs;
 
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -9,7 +9,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 
-import com.afollestad.materialdialogs.commons.R;
+import com.afollestad.materialdialogs.R;
 
 import java.lang.reflect.Method;
 

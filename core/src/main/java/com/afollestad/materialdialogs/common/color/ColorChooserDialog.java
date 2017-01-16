@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.color;
+package com.afollestad.materialdialogs.common.color;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -30,8 +30,8 @@ import android.widget.TextView;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
+import com.afollestad.materialdialogs.R;
 import com.afollestad.materialdialogs.Theme;
-import com.afollestad.materialdialogs.commons.R;
 import com.afollestad.materialdialogs.internal.MDTintHelper;
 import com.afollestad.materialdialogs.util.DialogUtils;
 

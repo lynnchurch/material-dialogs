@@ -1,5 +1,6 @@
-package com.afollestad.materialdialogs.prefs;
+package com.afollestad.materialdialogs.common.prefs;
 
+import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Dialog;
 import android.content.Context;
@@ -8,64 +9,108 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.preference.MultiSelectListPreference;
+import android.preference.EditTextPreference;
 import android.support.annotation.NonNull;
+import android.support.v7.widget.AppCompatEditText;
 import android.util.AttributeSet;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import com.afollestad.materialdialogs.MaterialDialog.Builder;
+import com.afollestad.materialdialogs.R;
+import com.afollestad.materialdialogs.internal.MDTintHelper;
+import com.afollestad.materialdialogs.util.DialogUtils;
 
 /**
- * This class only works on Honeycomb (API 11) and above.
- *
  * @author Aidan Follestad (afollestad)
  */
-@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-public class MaterialMultiSelectListPreference extends MultiSelectListPreference {
+public class MaterialEditTextPreference extends EditTextPreference {
 
-    private Context context;
+    private int mColor = 0;
     private MaterialDialog mDialog;
+    private EditText mEditText;
 
-    public MaterialMultiSelectListPreference(Context context) {
+    public MaterialEditTextPreference(Context context) {
         super(context);
         init(context, null);
     }
 
-    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs) {
+    public MaterialEditTextPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context, attrs);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs, int defStyleAttr) {
+    public MaterialEditTextPreference(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context, attrs);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    public MaterialEditTextPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context, attrs);
     }
 
-    @Override
-    public void setEntries(CharSequence[] entries) {
-        super.setEntries(entries);
-        if (mDialog != null)
-            mDialog.setItems(entries);
-    }
 
     private void init(Context context, AttributeSet attrs) {
-        this.context = context;
         PrefUtil.setLayoutResource(context, this, attrs);
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.GINGERBREAD_MR1)
-            setWidgetLayoutResource(0);
+        int fallback;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            fallback = DialogUtils.resolveColor(context, android.R.attr.colorAccent);
+        else fallback = 0;
+        fallback = DialogUtils.resolveColor(context, R.attr.colorAccent, fallback);
+        mColor = DialogUtils.resolveColor(context, R.attr.md_widget_color, fallback);
+
+        mEditText = new AppCompatEditText(context, attrs);
+        // Give it an ID so it can be saved/restored
+        mEditText.setId(android.R.id.edit);
+        mEditText.setEnabled(true);
+    }
+
+    @Override
+    protected void onAddEditTextToDialogView(@NonNull View dialogView, @NonNull EditText editText) {
+        ((ViewGroup) dialogView).addView(editText, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    @SuppressLint("MissingSuperCall")
+    @Override
+    protected void onBindDialogView(@NonNull View view) {
+        EditText editText = mEditText;
+        editText.setText(getText());
+        // Initialize cursor to end of text
+        if (editText.getText().length() > 0)
+            editText.setSelection(editText.length());
+        ViewParent oldParent = editText.getParent();
+        if (oldParent != view) {
+            if (oldParent != null)
+                ((ViewGroup) oldParent).removeView(editText);
+            onAddEditTextToDialogView(view, editText);
+        }
+    }
+
+    @Override
+    protected void onDialogClosed(boolean positiveResult) {
+        if (positiveResult) {
+            String value = mEditText.getText().toString();
+            if (callChangeListener(value))
+                setText(value);
+        }
+    }
+
+    @Override
+    public EditText getEditText() {
+        return mEditText;
     }
 
     @Override
@@ -75,63 +120,52 @@ public class MaterialMultiSelectListPreference extends MultiSelectListPreference
 
     @Override
     protected void showDialog(Bundle state) {
-        List<Integer> indices = new ArrayList<>();
-        for (String s : getValues()) {
-            int index = findIndexOfValue(s);
-            if (index >= 0)
-                indices.add(findIndexOfValue(s));
-        }
-        MaterialDialog.Builder builder = new MaterialDialog.Builder(context)
+        Builder mBuilder = new MaterialDialog.Builder(getContext())
                 .title(getDialogTitle())
                 .icon(getDialogIcon())
-                .negativeText(getNegativeButtonText())
                 .positiveText(getPositiveButtonText())
+                .negativeText(getNegativeButtonText())
+                .dismissListener(this)
                 .onAny(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
                         switch (which) {
                             default:
-                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_POSITIVE);
+                                MaterialEditTextPreference.this.onClick(dialog, DialogInterface.BUTTON_POSITIVE);
                                 break;
                             case NEUTRAL:
-                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEUTRAL);
+                                MaterialEditTextPreference.this.onClick(dialog, DialogInterface.BUTTON_NEUTRAL);
                                 break;
                             case NEGATIVE:
-                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEGATIVE);
+                                MaterialEditTextPreference.this.onClick(dialog, DialogInterface.BUTTON_NEGATIVE);
                                 break;
                         }
-                    }
-                })
-                .items(getEntries())
-                .itemsCallbackMultiChoice(indices.toArray(new Integer[indices.size()]), new MaterialDialog.ListCallbackMultiChoice() {
-                    @Override
-                    public boolean onSelection(MaterialDialog dialog, Integer[] which, CharSequence[] text) {
-                        onClick(null, DialogInterface.BUTTON_POSITIVE);
-                        dialog.dismiss();
-                        final Set<String> values = new HashSet<>();
-                        for (int i : which) {
-                            values.add(getEntryValues()[i].toString());
-                        }
-                        if (callChangeListener(values))
-                            setValues(values);
-                        return true;
                     }
                 })
                 .dismissListener(this);
 
-        final View contentView = onCreateDialogView();
-        if (contentView != null) {
-            onBindDialogView(contentView);
-            builder.customView(contentView, false);
+        @SuppressLint("InflateParams")
+        View layout = LayoutInflater.from(getContext()).inflate(R.layout.md_stub_inputpref, null);
+        onBindDialogView(layout);
+
+        MDTintHelper.setTint(mEditText, mColor);
+
+        TextView message = (TextView) layout.findViewById(android.R.id.message);
+        if (getDialogMessage() != null && getDialogMessage().toString().length() > 0) {
+            message.setVisibility(View.VISIBLE);
+            message.setText(getDialogMessage());
         } else {
-            builder.content(getDialogMessage());
+            message.setVisibility(View.GONE);
         }
+        mBuilder.customView(layout, false);
 
         PrefUtil.registerOnActivityDestroyListener(this, this);
 
-        mDialog = builder.build();
+        mDialog = mBuilder.build();
         if (state != null)
             mDialog.onRestoreInstanceState(state);
+        requestInputMethod(mDialog);
+
         mDialog.show();
     }
 
@@ -139,6 +173,14 @@ public class MaterialMultiSelectListPreference extends MultiSelectListPreference
     public void onDismiss(DialogInterface dialog) {
         super.onDismiss(dialog);
         PrefUtil.unregisterOnActivityDestroyListener(this, this);
+    }
+
+    /**
+     * Copied from DialogPreference.java
+     */
+    private void requestInputMethod(Dialog dialog) {
+        Window window = dialog.getWindow();
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
 
     @Override

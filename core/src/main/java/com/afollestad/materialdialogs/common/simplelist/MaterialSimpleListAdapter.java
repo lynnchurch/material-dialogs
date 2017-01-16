@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.simplelist;
+package com.afollestad.materialdialogs.common.simplelist;
 
 import android.graphics.PorterDuff;
 import android.support.v7.widget.RecyclerView;
@@ -9,7 +9,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.afollestad.materialdialogs.commons.R;
+import com.afollestad.materialdialogs.R;
 import com.afollestad.materialdialogs.internal.MDAdapter;
 
 import java.util.ArrayList;

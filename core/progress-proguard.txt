@@ -1,1 +1,3 @@
 -keep class me.zhanghai.android.materialprogressbar.** { *; }
+-keep class com.wdullaer.materialdatetimepicker.** { *; }
+-keep class com.afollestad.materialdialogs.progress.** { *; }

@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.simplelist;
+package com.afollestad.materialdialogs.common.simplelist;
 
 import android.content.Context;
 import android.graphics.Color;

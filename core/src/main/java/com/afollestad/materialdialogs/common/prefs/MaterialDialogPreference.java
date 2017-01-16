@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.prefs;
+package com.afollestad.materialdialogs.common.prefs;
 
 import android.annotation.TargetApi;
 import android.app.Dialog;

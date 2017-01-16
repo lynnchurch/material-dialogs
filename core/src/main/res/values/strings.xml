@@ -9,4 +9,5 @@
     <string name="md_custom_label">Custom</string>
     <string name="md_presets_label">Presets</string>
     <string name="new_folder">New Folder</string>
+    <string name="default_progressbar">Default Progressbar:</string>
 </resources>

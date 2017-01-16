@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.folderselector;
+package com.afollestad.materialdialogs.common.folderselector;
 
 import android.Manifest;
 import android.app.Activity;
@@ -16,11 +16,11 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
-import android.widget.Toast;
+import android.webkit.MimeTypeMap;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.afollestad.materialdialogs.commons.R;
+import com.afollestad.materialdialogs.R;
 
 import java.io.File;
 import java.io.Serializable;
@@ -28,52 +28,108 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 
-/**
- * @author Aidan Follestad (afollestad)
- */
-public class FolderChooserDialog extends DialogFragment implements MaterialDialog.ListCallback {
+public class FileChooserDialog extends DialogFragment implements MaterialDialog.ListCallback {
 
-    private final static String DEFAULT_TAG = "[MD_FOLDER_SELECTOR]";
+    private final static String DEFAULT_TAG = "[MD_FILE_SELECTOR]";
 
     private File parentFolder;
     private File[] parentContents;
-    private boolean canGoUp = false;
-    private FolderCallback mCallback;
+    private boolean canGoUp = true;
+    private FileCallback callback;
 
-    public interface FolderCallback {
-
-        void onFolderSelection(@NonNull FolderChooserDialog dialog, @NonNull File folder);
+    public interface FileCallback {
+        void onFileSelection(@NonNull FileChooserDialog dialog, @NonNull File file);
     }
 
-    public FolderChooserDialog() {
+    public FileChooserDialog() {
     }
 
-    String[] getContentsArray() {
+    CharSequence[] getContentsArray() {
         if (parentContents == null) {
             if (canGoUp)
                 return new String[]{getBuilder().goUpLabel};
             return new String[]{};
         }
         String[] results = new String[parentContents.length + (canGoUp ? 1 : 0)];
-        if (canGoUp) results[0] = "...";
+        if (canGoUp) results[0] = getBuilder().goUpLabel;
         for (int i = 0; i < parentContents.length; i++)
             results[canGoUp ? i + 1 : i] = parentContents[i].getName();
         return results;
     }
 
-    File[] listFiles() {
+    File[] listFiles(@Nullable String mimeType, @Nullable String[] extensions) {
         File[] contents = parentFolder.listFiles();
         List<File> results = new ArrayList<>();
         if (contents != null) {
+            MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
             for (File fi : contents) {
-                if (fi.isDirectory()) results.add(fi);
+                if (fi.isDirectory()) {
+                    results.add(fi);
+                } else {
+                    if (extensions != null) {
+                        boolean found = false;
+                        for (String ext : extensions) {
+                            if (fi.getName().toLowerCase().endsWith(ext.toLowerCase())) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) results.add(fi);
+                    } else if (mimeType != null) {
+                        if (fileIsMimeType(fi, mimeType, mimeTypeMap)) {
+                            results.add(fi);
+                        }
+                    }
+                }
             }
-            Collections.sort(results, new FolderSorter());
+            Collections.sort(results, new FileSorter());
             return results.toArray(new File[results.size()]);
         }
         return null;
+    }
+
+    boolean fileIsMimeType(File file, String mimeType, MimeTypeMap mimeTypeMap) {
+        if (mimeType == null || mimeType.equals("*/*")) {
+            return true;
+        } else {
+            // get the file mime type
+            String filename = file.toURI().toString();
+            int dotPos = filename.lastIndexOf('.');
+            if (dotPos == -1) {
+                return false;
+            }
+            String fileExtension = filename.substring(dotPos + 1);
+            if (fileExtension.endsWith("json"))
+                return mimeType.startsWith("application/json");
+            String fileType = mimeTypeMap.getMimeTypeFromExtension(fileExtension);
+            if (fileType == null) {
+                return false;
+            }
+            // check the 'type/subtype' pattern
+            if (fileType.equals(mimeType)) {
+                return true;
+            }
+            // check the 'type/*' pattern
+            int mimeTypeDelimiter = mimeType.lastIndexOf('/');
+            if (mimeTypeDelimiter == -1) {
+                return false;
+            }
+            String mimeTypeMainType = mimeType.substring(0, mimeTypeDelimiter);
+            String mimeTypeSubtype = mimeType.substring(mimeTypeDelimiter + 1);
+            if (!mimeTypeSubtype.equals("*")) {
+                return false;
+            }
+            int fileTypeDelimiter = fileType.lastIndexOf('/');
+            if (fileTypeDelimiter == -1) {
+                return false;
+            }
+            String fileTypeMainType = fileType.substring(0, fileTypeDelimiter);
+            if (fileTypeMainType.equals(mimeTypeMainType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -89,24 +145,18 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
                     .positiveText(android.R.string.ok)
                     .build();
         }
+
         if (getArguments() == null || !getArguments().containsKey("builder"))
-            throw new IllegalStateException("You must create a FolderChooserDialog using the Builder.");
+            throw new IllegalStateException("You must create a FileChooserDialog using the Builder.");
         if (!getArguments().containsKey("current_path"))
             getArguments().putString("current_path", getBuilder().initialPath);
         parentFolder = new File(getArguments().getString("current_path"));
         checkIfCanGoUp();
-        parentContents = listFiles();
-        MaterialDialog.Builder builder = new MaterialDialog.Builder(getActivity())
+        parentContents = listFiles(getBuilder().mimeType, getBuilder().extensions);
+        return new MaterialDialog.Builder(getActivity())
                 .title(parentFolder.getAbsolutePath())
-                .items((CharSequence[]) getContentsArray())
+                .items(getContentsArray())
                 .itemsCallback(this)
-                .onPositive(new MaterialDialog.SingleButtonCallback() {
-                    @Override
-                    public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                        dialog.dismiss();
-                        mCallback.onFolderSelection(FolderChooserDialog.this, parentFolder);
-                    }
-                })
                 .onNegative(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
@@ -114,36 +164,8 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
                     }
                 })
                 .autoDismiss(false)
-                .positiveText(getBuilder().chooseButton)
-                .negativeText(getBuilder().cancelButton);
-        if (getBuilder().allowNewFolder) {
-            builder.neutralText(getBuilder().newFolderButton);
-            builder.onNeutral(new MaterialDialog.SingleButtonCallback() {
-                @Override
-                public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                    createNewFolder();
-                }
-            });
-        }
-        if (Objects.equals(getBuilder().initialPath, "/")) {
-            canGoUp = false;
-        }
-        return builder.build();
-    }
-
-    private void createNewFolder() {
-        new MaterialDialog.Builder(getActivity())
-                .title(getBuilder().newFolderButton)
-                .input(0, 0, false, new MaterialDialog.InputCallback() {
-                    @Override
-                    public void onInput(@NonNull MaterialDialog dialog, CharSequence input) {
-                        //noinspection ResultOfMethodCallIgnored
-                        final File newFi = new File(parentFolder, input.toString());
-                        if (!newFi.mkdir())
-                            Toast.makeText(getActivity(), "Unable to create folder " + newFi.getAbsolutePath() + ", make sure you have the WRITE_EXTERNAL_STORAGE permission or root permissions.", Toast.LENGTH_LONG).show();
-                        else reload();
-                    }
-                }).show();
+                .negativeText(getBuilder().cancelButton)
+                .build();
     }
 
     @Override
@@ -159,8 +181,18 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
             if (parentFolder.getAbsolutePath().equals("/storage/emulated"))
                 parentFolder = Environment.getExternalStorageDirectory();
         }
-        reload();
+        if (parentFolder.isFile()) {
+            callback.onFileSelection(this, parentFolder);
+            dismiss();
+        } else {
+            parentContents = listFiles(getBuilder().mimeType, getBuilder().extensions);
+            MaterialDialog dialog = (MaterialDialog) getDialog();
+            dialog.setTitle(parentFolder.getAbsolutePath());
+            getArguments().putString("current_path", parentFolder.getAbsolutePath());
+            dialog.setItems(getContentsArray());
+        }
     }
+
 
     private void checkIfCanGoUp() {
         try {
@@ -170,19 +202,10 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
         }
     }
 
-    private void reload() {
-
-        parentContents = listFiles();
-        MaterialDialog dialog = (MaterialDialog) getDialog();
-        dialog.setTitle(parentFolder.getAbsolutePath());
-        getArguments().putString("current_path", parentFolder.getAbsolutePath());
-        dialog.setItems((CharSequence[]) getContentsArray());
-    }
-
     @Override
     public void onAttach(Activity activity) {
         super.onAttach(activity);
-        mCallback = (FolderCallback) activity;
+        callback = (FileCallback) activity;
     }
 
     public void show(FragmentActivity context) {
@@ -199,46 +222,24 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
     public static class Builder implements Serializable {
 
         @NonNull final transient AppCompatActivity context;
-        @StringRes int chooseButton;
         @StringRes int cancelButton;
         String initialPath;
+        String mimeType;
+        String[] extensions;
         String tag;
-        boolean allowNewFolder;
-        @StringRes int newFolderButton;
         String goUpLabel;
 
-        public <ActivityType extends AppCompatActivity & FolderCallback> Builder(@NonNull ActivityType context) {
+        public <ActivityType extends AppCompatActivity & FileCallback> Builder(@NonNull ActivityType context) {
             this.context = context;
-            chooseButton = R.string.md_choose_label;
             cancelButton = android.R.string.cancel;
-            goUpLabel = "...";
             initialPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-        }
-
-        @NonNull
-        public Builder chooseButton(@StringRes int text) {
-            chooseButton = text;
-            return this;
+            mimeType = null;
+            goUpLabel = "...";
         }
 
         @NonNull
         public Builder cancelButton(@StringRes int text) {
             cancelButton = text;
-            return this;
-        }
-
-        @NonNull
-        public Builder goUpLabel(String text) {
-            goUpLabel = text;
-            return this;
-        }
-
-        @NonNull
-        public Builder allowNewFolder(boolean allow, @StringRes int buttonLabel) {
-            allowNewFolder = allow;
-            if (buttonLabel == 0)
-                buttonLabel = R.string.new_folder;
-            newFolderButton = buttonLabel;
             return this;
         }
 
@@ -251,6 +252,18 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
         }
 
         @NonNull
+        public Builder mimeType(@Nullable String type) {
+            mimeType = type;
+            return this;
+        }
+
+        @NonNull
+        public Builder extensionsFilter(@Nullable String... extensions) {
+            this.extensions = extensions;
+            return this;
+        }
+
+        @NonNull
         public Builder tag(@Nullable String tag) {
             if (tag == null)
                 tag = DEFAULT_TAG;
@@ -259,8 +272,14 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
         }
 
         @NonNull
-        public FolderChooserDialog build() {
-            FolderChooserDialog dialog = new FolderChooserDialog();
+        public Builder goUpLabel(String text) {
+            goUpLabel = text;
+            return this;
+        }
+
+        @NonNull
+        public FileChooserDialog build() {
+            FileChooserDialog dialog = new FileChooserDialog();
             Bundle args = new Bundle();
             args.putSerializable("builder", this);
             dialog.setArguments(args);
@@ -268,11 +287,16 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
         }
 
         @NonNull
-        public FolderChooserDialog show() {
-            FolderChooserDialog dialog = build();
+        public FileChooserDialog show() {
+            FileChooserDialog dialog = build();
             dialog.show(context);
             return dialog;
         }
+    }
+
+    @NonNull
+    public String getInitialPath() {
+        return getBuilder().initialPath;
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -281,11 +305,16 @@ public class FolderChooserDialog extends DialogFragment implements MaterialDialo
         return (Builder) getArguments().getSerializable("builder");
     }
 
-    private static class FolderSorter implements Comparator<File> {
-
+    private static class FileSorter implements Comparator<File> {
         @Override
         public int compare(File lhs, File rhs) {
-            return lhs.getName().compareTo(rhs.getName());
+            if (lhs.isDirectory() && !rhs.isDirectory()) {
+                return -1;
+            } else if (!lhs.isDirectory() && rhs.isDirectory()) {
+                return 1;
+            } else {
+                return lhs.getName().compareTo(rhs.getName());
+            }
         }
     }
 }

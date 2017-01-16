@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.prefs;
+package com.afollestad.materialdialogs.common.prefs;
 
 import android.annotation.TargetApi;
 import android.app.Dialog;
@@ -8,45 +8,57 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.preference.ListPreference;
+import android.preference.MultiSelectListPreference;
 import android.support.annotation.NonNull;
-import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.view.View;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
 
-import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * @author Marc Holder Kluver (marchold), Aidan Follestad (afollestad)
+ * This class only works on Honeycomb (API 11) and above.
+ *
+ * @author Aidan Follestad (afollestad)
  */
-public class MaterialListPreference extends ListPreference {
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+public class MaterialMultiSelectListPreference extends MultiSelectListPreference {
 
     private Context context;
     private MaterialDialog mDialog;
 
-    public MaterialListPreference(Context context) {
+    public MaterialMultiSelectListPreference(Context context) {
         super(context);
         init(context, null);
     }
 
-    public MaterialListPreference(Context context, AttributeSet attrs) {
+    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context, attrs);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public MaterialListPreference(Context context, AttributeSet attrs, int defStyleAttr) {
+    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context, attrs);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public MaterialListPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    public MaterialMultiSelectListPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context, attrs);
+    }
+
+    @Override
+    public void setEntries(CharSequence[] entries) {
+        super.setEntries(entries);
+        if (mDialog != null)
+            mDialog.setItems(entries);
     }
 
     private void init(Context context, AttributeSet attrs) {
@@ -57,69 +69,55 @@ public class MaterialListPreference extends ListPreference {
     }
 
     @Override
-    public void setEntries(CharSequence[] entries) {
-        super.setEntries(entries);
-        if (mDialog != null)
-            mDialog.setItems(entries);
-    }
-
-    @Override
     public Dialog getDialog() {
         return mDialog;
     }
 
-    public RecyclerView getRecyclerView() {
-        if (getDialog() == null) return null;
-        return ((MaterialDialog) getDialog()).getRecyclerView();
-    }
-
     @Override
     protected void showDialog(Bundle state) {
-        if (getEntries() == null || getEntryValues() == null) {
-            throw new IllegalStateException(
-                    "ListPreference requires an entries array and an entryValues array.");
+        List<Integer> indices = new ArrayList<>();
+        for (String s : getValues()) {
+            int index = findIndexOfValue(s);
+            if (index >= 0)
+                indices.add(findIndexOfValue(s));
         }
-
-        int preselect = findIndexOfValue(getValue());
         MaterialDialog.Builder builder = new MaterialDialog.Builder(context)
                 .title(getDialogTitle())
                 .icon(getDialogIcon())
-                .dismissListener(this)
+                .negativeText(getNegativeButtonText())
+                .positiveText(getPositiveButtonText())
                 .onAny(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
                         switch (which) {
                             default:
-                                MaterialListPreference.this.onClick(dialog, DialogInterface.BUTTON_POSITIVE);
+                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_POSITIVE);
                                 break;
                             case NEUTRAL:
-                                MaterialListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEUTRAL);
+                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEUTRAL);
                                 break;
                             case NEGATIVE:
-                                MaterialListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEGATIVE);
+                                MaterialMultiSelectListPreference.this.onClick(dialog, DialogInterface.BUTTON_NEGATIVE);
                                 break;
                         }
                     }
                 })
-                .negativeText(getNegativeButtonText())
                 .items(getEntries())
-                .autoDismiss(true) // immediately close the dialog after selection
-                .itemsCallbackSingleChoice(preselect, new MaterialDialog.ListCallbackSingleChoice() {
+                .itemsCallbackMultiChoice(indices.toArray(new Integer[indices.size()]), new MaterialDialog.ListCallbackMultiChoice() {
                     @Override
-                    public boolean onSelection(MaterialDialog dialog, View itemView, int which, CharSequence text) {
+                    public boolean onSelection(MaterialDialog dialog, Integer[] which, CharSequence[] text) {
                         onClick(null, DialogInterface.BUTTON_POSITIVE);
-                        if (which >= 0 && getEntryValues() != null) {
-                            try {
-                                Field clickedIndex = ListPreference.class.getDeclaredField("mClickedDialogEntryIndex");
-                                clickedIndex.setAccessible(true);
-                                clickedIndex.set(MaterialListPreference.this, which);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
+                        dialog.dismiss();
+                        final Set<String> values = new HashSet<>();
+                        for (int i : which) {
+                            values.add(getEntryValues()[i].toString());
                         }
+                        if (callChangeListener(values))
+                            setValues(values);
                         return true;
                     }
-                });
+                })
+                .dismissListener(this);
 
         final View contentView = onCreateDialogView();
         if (contentView != null) {
@@ -134,7 +132,6 @@ public class MaterialListPreference extends ListPreference {
         mDialog = builder.build();
         if (state != null)
             mDialog.onRestoreInstanceState(state);
-        onClick(mDialog, DialogInterface.BUTTON_NEGATIVE);
         mDialog.show();
     }
 

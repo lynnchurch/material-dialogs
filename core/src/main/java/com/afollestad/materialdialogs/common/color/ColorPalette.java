@@ -1,4 +1,4 @@
-package com.afollestad.materialdialogs.color;
+package com.afollestad.materialdialogs.common.color;
 
 import android.graphics.Color;
 

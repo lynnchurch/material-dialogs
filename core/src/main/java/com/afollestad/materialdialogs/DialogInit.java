@@ -25,6 +25,7 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.afollestad.materialdialogs.common.progress.ProgressWheel;
 import com.afollestad.materialdialogs.internal.MDAdapter;
 import com.afollestad.materialdialogs.internal.MDButton;
 import com.afollestad.materialdialogs.internal.MDRootLayout;
@@ -387,6 +388,12 @@ class DialogInit {
 
     private static void setupProgressDialog(final MaterialDialog dialog) {
         final MaterialDialog.Builder builder = dialog.builder;
+        if (builder.indeterminateProgress && !builder.indeterminateIsHorizontalProgress) {
+            ProgressWheel progressWheel = (ProgressWheel) dialog.view.findViewById(R.id.progressWheel);
+            progressWheel.setBarColor(builder.widgetColor);
+            return;
+        }
+
         if (builder.indeterminateProgress || builder.progress > -2) {
             dialog.progressBar = (ProgressBar) dialog.view.findViewById(android.R.id.progress);
             if (dialog.progressBar == null) return;
