@@ -174,9 +174,9 @@ public class ProgressWheel extends View {
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
-        if (hasWindowFocus) {
+        if (isSpinning) {
             lastTimeAnimated = SystemClock.uptimeMillis();
-            invalidate();
+            pausedTimeWithoutGrowing = 150;
         }
     }
 
